@@ -34,6 +34,23 @@ class Benchmark(
     private val reporter = ConsoleReporter.forRegistry(metrics).convertRatesTo(TimeUnit.SECONDS).convertDurationsTo(TimeUnit.MILLISECONDS).build()
 
     suspend fun start(scope: CoroutineScope): Duration {
+        // logger.info("starting benchmark with $registrationCount registrations")
+
+        // launchRequestWorkers(scope)
+        // launchRegistrationWorkers(scope)
+        // startReporter(scope)
+
+        // emails.generate(registrationCount)
+
+        // return measureTime {
+        //     while (metrics.counter("registration - total").count < registrationCount) {
+        //         delay(100.milliseconds)
+        //     }
+        // }.also { duration ->
+        //     stop()
+        //     logger.info("benchmark finished in $duration")
+        // }
+
         logger.info("starting benchmark with $registrationCount registrations")
 
         launchRequestWorkers(scope)
@@ -42,14 +59,31 @@ class Benchmark(
 
         emails.generate(registrationCount)
 
-        return measureTime {
+        val duration = measureTime {
             while (metrics.counter("registration - total").count < registrationCount) {
                 delay(100.milliseconds)
             }
-        }.also { duration ->
-            stop()
-            logger.info("benchmark finished in $duration")
         }
+
+        // (Added Code)
+        // calculate reg per sec (avoid div by zero)
+        val registrationsPerSecond = if (duration.inWholeSeconds > 0) registrationCount / duration.inWholeSeconds else 0
+
+        // log the result (record info)
+        logger.info("benchmark finished in " + duration + " with " + registrationsPerSecond + " registrations per second")
+
+        // if less than 50, it's a problem (req not met)
+        if (registrationsPerSecond < 50) {
+            // log error and throw exception
+            logger.error("Error: Business requirement not met. Only " + registrationsPerSecond + " registrations per second.")
+            // throw runtime exception (fail the build)
+            throw RuntimeException("Benchmark test failed: Did not meet 50 registrations per second requirement.")
+        }
+
+        // cleanup resources (end test)
+        stop()
+
+        return duration
     }
 
     suspend fun processConfirmation(message: String) {
